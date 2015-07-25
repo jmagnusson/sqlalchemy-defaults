@@ -37,6 +37,10 @@ class TestStringDefaults(TestCase):
     def test_assigns_string_server_defaults(self):
         assert self.columns.hobbies.server_default.arg == u'football'
 
+    def test_empty_default_and_server_default(self):
+        assert self.columns.name.default.arg == u''
+        assert self.columns.name.server_default.arg == u''
+
     def test_override_server_default(self):
         assert self.columns.hobbies2.server_default.arg == u''
 

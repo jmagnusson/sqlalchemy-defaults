@@ -7,14 +7,42 @@ from sqlalchemy.orm import sessionmaker
 
 from sqlalchemy_defaults import make_lazy_configured
 
+IS_MYSQL = (
+    os.environ.get('DB') == 'mysql' or
+    os.environ.get('DSN', '').startswith('mysql')
+)
+MYSQLD_VERSION = tuple(
+    int(i) for i in
+    os.popen('mysqld -V').read()
+    .partition('Ver ')[2]
+    .partition(' ')[0]
+    .split('.')
+    if i.isdigit()
+)
+
+
+def _get_default_settings_overrides():
+    kw = {}
+    if IS_MYSQL:
+        # MySQL (at least up till version 5.7) does not support a default
+        # value for TEXT type columns.
+        kw['text_server_defaults'] = False
+
+        if MYSQLD_VERSION:
+            if MYSQLD_VERSION < (5, 7):
+                # NOW() is not supported as a DEFAULT value below version 5.7
+                kw['auto_now'] = False
+    return kw
+
 
 make_lazy_configured(
-    sa.orm.mapper
+    sa.orm.mapper,
+    **_get_default_settings_overrides()
 )
 
 
 class TestCase(object):
-    def get_dns_from_driver(self, driver):
+    def get_dsn_from_driver(self, driver):
         if driver == 'postgres':
             return 'postgres://postgres@localhost/sqlalchemy_defaults_test'
         elif driver == 'mysql':
@@ -26,8 +54,10 @@ class TestCase(object):
 
     def setup_method(self, method):
         driver = os.environ.get('DB', 'sqlite')
-        dns = self.get_dns_from_driver(driver)
-        self.engine = create_engine(dns)
+        dsn = os.environ.get('DSN', None)
+        if dsn is None:
+            dsn = self.get_dsn_from_driver(driver)
+        self.engine = create_engine(dsn)
         self.Model = declarative_base()
 
         self.create_models(**self.column_options)

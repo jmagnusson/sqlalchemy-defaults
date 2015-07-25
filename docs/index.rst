@@ -111,3 +111,31 @@ After you've defined all your models you need to make desired mapper lazy config
 
 
     make_lazy_configured(sa.orm.mapper)
+
+
+make_lazy_configured can also be passed in a global set of default options to use like this:
+::
+
+    make_lazy_configured(
+        sa.orm.mapper,
+        numeric_defaults=False,
+        enum_names=False
+    )
+
+
+Caveats
+-------
+
+Please note that at the time of writing `MySQL does not support setting server defaults for columns of TEXT type <http://dev.mysql.com/doc/refman/5.7/en/blob.html>`_, which means that you will have to set the option ``text_server_defaults`` to ``False`` to avoid errors if you're using TEXT columns:
+::
+
+    make_lazy_configured(sa.orm.mapper, text_server_defaults=False)
+
+When using ``DATETIME`` fields in MySQL versions before 5.6.5 you should also pass in ``auto_now=False`` `as NOW is not a supported argument to DEFAULT below that version <http://dev.mysql.com/doc/refman/5.6/en/timestamp-initialization.html>`_:
+::
+
+    make_lazy_configured(
+        sa.orm.mapper,
+        text_server_defaults=False,
+        auto_now=False
+    )

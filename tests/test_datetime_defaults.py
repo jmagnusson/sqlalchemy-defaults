@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
+import pytest
+
 from datetime import date, datetime
 import sqlalchemy as sa
 
 from sqlalchemy_defaults import Column
-from tests import TestCase
+from tests import MYSQLD_VERSION, TestCase
 
 
 class TestDateTimeDefaults(TestCase):
@@ -22,6 +24,10 @@ class TestDateTimeDefaults(TestCase):
 
         self.User = User
 
+    @pytest.mark.skipif(
+        MYSQLD_VERSION and MYSQLD_VERSION < (5, 6, 5),
+        reason='Not testing when MySQL is below version 5.6.5'
+    )
     def test_autonow(self):
         column = self.User.created_at
         assert isinstance(column.default.arg(column), datetime)

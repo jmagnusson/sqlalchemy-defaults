@@ -47,11 +47,16 @@ class ConfigurationManager(object):
         'auto_now': True,
         'numeric_defaults': True,
         'string_defaults': True,
+        'text_server_defaults': True,
         'boolean_defaults': True,
         'min_max_check_constraints': True,
         'enum_names': True,
         'index_foreign_keys': True
     }
+
+    def __init__(self, **default_option_overrides):
+        self.default_options = self.DEFAULT_OPTIONS.copy()
+        self.default_options.update(**default_option_overrides)
 
     def __call__(self, mapper, class_):
         if hasattr(class_, '__lazy_options__'):
@@ -69,7 +74,7 @@ class ModelConfigurator(object):
         try:
             return self.model.__lazy_options__[name]
         except (AttributeError, KeyError):
-            return self.manager.DEFAULT_OPTIONS[name]
+            return self.manager.default_options[name]
 
     def literal_value(self, value):
         return (
@@ -120,16 +125,28 @@ class ModelConfigurator(object):
                     six.text_type(column.default.arg)
                 )
 
-    def assign_string_defaults(self, column):
+    def assign_string_defaults(self, column, set_server_default=True):
         """
         Assigns string column server_default based on column default value
         """
+        def set_server_default_func():
+            if set_server_default:
+                column.server_default = sa.schema.DefaultClause(
+                    column.default.arg
+                )
+
         if column.default is not None and column.server_default is None and (
             isinstance(column.default.arg, six.text_type)
         ):
-            column.server_default = sa.schema.DefaultClause(
-                column.default.arg
-            )
+            set_server_default_func()
+        elif column.default is None and column.server_default is None:
+            # Skip for enums that don't have '' in their choices.
+            if isinstance(column.type, sa.Enum) and (
+                u'' not in column.type.enums
+            ):
+                return
+            column.default = sa.schema.ColumnDefault(u'')
+            set_server_default_func()
 
     def assign_boolean_defaults(self, column):
         """
@@ -154,14 +171,24 @@ class ModelConfigurator(object):
             self.assign_boolean_defaults(column)
 
         elif (is_string(column.type) and self.get_option('string_defaults')):
-            self.assign_string_defaults(column)
+            if is_text(column.type):
+                self.assign_string_defaults(
+                    column,
+                    set_server_default=self.get_option('text_server_defaults')
+                )
+            else:
+                self.assign_string_defaults(column)
 
         elif (is_numeric(column.type) and self.get_option('numeric_defaults')):
             self.assign_numeric_defaults(column)
 
-        elif ((isinstance(column.type, sa.Date) or
-                isinstance(column.type, sa.DateTime))
-                and self.get_option('auto_now')):
+        elif (
+            (
+                isinstance(column.type, sa.Date) or
+                isinstance(column.type, sa.DateTime)
+            ) and
+            self.get_option('auto_now')
+        ):
             self.assign_datetime_auto_now(column)
 
         elif (isinstance(column.type, sa.Enum) and
@@ -191,6 +218,13 @@ def is_string(type_):
     )
 
 
+def is_text(type_):
+    return (
+        isinstance(type_, sa.Text) or
+        (isclass(type_) and issubclass(type_, sa.Text))
+    )
+
+
 def is_boolean(type_):
     return (
         isinstance(type_, sa.Boolean) or
@@ -205,8 +239,8 @@ def is_numeric(type_):
     )
 
 
-def make_lazy_configured(mapper):
-    manager = ConfigurationManager()
+def make_lazy_configured(mapper, **default_option_overrides):
+    manager = ConfigurationManager(**default_option_overrides)
     sa.event.listen(
         mapper,
         'mapper_configured',
