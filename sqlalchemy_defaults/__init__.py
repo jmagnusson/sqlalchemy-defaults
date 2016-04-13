@@ -47,6 +47,7 @@ class ConfigurationManager(object):
         'auto_now': True,
         'numeric_defaults': True,
         'string_defaults': True,
+        'string_server_defaults': True,
         'text_server_defaults': True,
         'boolean_defaults': True,
         'min_max_check_constraints': True,
@@ -125,20 +126,30 @@ class ModelConfigurator(object):
                     six.text_type(column.default.arg)
                 )
 
-    def assign_string_defaults(self, column, set_server_default=True):
+    def assign_string_defaults(self, column):
         """
         Assigns string column server_default based on column default value
         """
-        def set_server_default_func():
-            if set_server_default:
+        def set_server_default():
+            if not isinstance(column.default.arg, six.text_type):
+                return
+            elif (
+                is_text(column.type) and
+                not self.get_option('text_server_defaults')
+            ):
+                return
+            elif (
+                is_string(column.type) and
+                not self.get_option('string_server_defaults')
+            ):
+                return
+            else:
                 column.server_default = sa.schema.DefaultClause(
                     column.default.arg
                 )
 
-        if column.default is not None and column.server_default is None and (
-            isinstance(column.default.arg, six.text_type)
-        ):
-            set_server_default_func()
+        if column.default is not None and column.server_default is None:
+            set_server_default()
         elif column.default is None and column.server_default is None:
             # Skip for enums that don't have '' in their choices.
             if isinstance(column.type, sa.Enum) and (
@@ -146,7 +157,7 @@ class ModelConfigurator(object):
             ):
                 return
             column.default = sa.schema.ColumnDefault(u'')
-            set_server_default_func()
+            set_server_default()
 
     def assign_boolean_defaults(self, column):
         """
@@ -171,13 +182,7 @@ class ModelConfigurator(object):
             self.assign_boolean_defaults(column)
 
         elif (is_string(column.type) and self.get_option('string_defaults')):
-            if is_text(column.type):
-                self.assign_string_defaults(
-                    column,
-                    set_server_default=self.get_option('text_server_defaults')
-                )
-            else:
-                self.assign_string_defaults(column)
+            self.assign_string_defaults(column)
 
         elif (is_numeric(column.type) and self.get_option('numeric_defaults')):
             self.assign_numeric_defaults(column)
