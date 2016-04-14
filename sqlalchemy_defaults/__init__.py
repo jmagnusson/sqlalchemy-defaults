@@ -1,8 +1,8 @@
 from datetime import date, datetime
 from inspect import isclass
+
 import six
 import sqlalchemy as sa
-
 
 __version__ = '0.4.4'
 
