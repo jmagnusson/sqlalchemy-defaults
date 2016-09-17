@@ -4,7 +4,7 @@ from inspect import isclass
 import six
 import sqlalchemy as sa
 
-__version__ = '0.4.4'
+__version__ = '0.4.4.dev1'
 
 
 class Column(sa.Column):
